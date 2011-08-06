@@ -1,0 +1,46 @@
+#!/bin/bash
+TRANSLANG="sv"
+CMPATH="/mnt/data/Documents/Programming/cyanogenmod"
+
+# Tool to get an overview of translation work needed to be done for CyanogenMod
+# Set up the language above and the path to the CyanogenMod source
+# Requires Phatt from https://github.com/nomego/Phatt
+
+echo "Packages with missing ${TRANSLANG}-translations:"
+find "${CMPATH}/frameworks/base" "${CMPATH}/packages" -type d -wholename */res/values | grep -v "/tests" | while read line; do
+	SELINE=`echo $line | sed -e "s/values/values-${TRANSLANG}/g"`
+	if [ ! -e $SELINE ]; then
+		VALUESDIRS=`ls -d1 ${line}* | wc -l`
+		if [ $VALUESDIRS -gt 1 ]; then
+			PACKAGEPATH=`dirname $(dirname ${line:$((${#CMPATH} + 1))})`
+			PACKAGE=`basename $PACKAGEPATH`
+			echo $PACKAGEPATH
+		fi
+	fi
+done
+
+echo ""
+echo "Packages with incomplete ${TRANSLANG}-translations:"
+find "${CMPATH}/frameworks/base" "${CMPATH}/packages" -type d -name values-${TRANSLANG} | while read line; do
+	OLINE=`echo $line | sed -e "s/values-${TRANSLANG}/values/g"`
+	PACKAGEPATH=`dirname $(dirname ${line:$((${#CMPATH} + 1))})`
+	PACKAGE=`basename $PACKAGEPATH`
+
+	# Ignore packages not in CM Gerrit
+	if [ "x$PACKAGE" == "xTag" -o "x$PACKAGE" == "xCalculator" ]; then
+		continue;
+	fi
+
+	CMSC=$(phatt $OLINE/strings.xml $line/strings.xml)
+	if [ $? -ne 0 ]; then
+		echo -e "\n$PACKAGEPATH:"
+		echo "$CMSC"
+	fi
+	if [ -e $OLINE/arrays.xml ]; then
+		CMSC=$(phatt $OLINE/arrays.xml $line/arrays.xml)
+		if [ $? -ne 0 ]; then
+			echo -e "\n$PACKAGEPATH (arrays)"
+			echo "$CMSC"
+		fi
+	fi
+done
