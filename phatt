@@ -42,9 +42,13 @@ function get_translation() {
 	echo "\tTranslation (? for help): ";
 	$input = stream_get_line(STDIN, 1024, PHP_EOL);
 	if (trim($input) == '?') {
-		echo "\t\t<blank>:\t\tSkips current string\n";
-		echo "\t\tg:\t\t\tAccept Google translation\n";
-		echo "\t\t<anything else>:\tUpdate language file with new text\n";
+echo <<<END
+		<blank>			Skips current string
+		!			Mark as non-translatable
+		g			Accept Google translation
+		<anything else>		Update language file with new text
+
+END;
 		$input = get_translation();
 	}
 	return $input;
@@ -160,14 +164,19 @@ foreach ($dataEn AS $key => $item) {
 			$gtrans = exec("translate -s en -d $langCode '".$item['value']."'");
 			printf("\t\ttranslation: %s\n", $gtrans);
 			$trans = get_translation();
-			if (strtolower(trim($trans)) == 'g') {
-				$trans = $gtrans;
-			}
-			if (trim($trans) == "") {
-				echo "Skipping translation\n";
-			} else {
-				$cmd =  "sed -i -e 's/\(name=.$lastTagName.*\)$/".'\1\n'."    <string name=\"".$item['name']."\">$trans<\/string>/g' $fileLang";
+			if (strtolower(trim($trans)) == '!') {
+				$cmd = "sed -i -e 's/ \(name=.".$item['name'].".\)>/ ".'\1'." translatable=\"false\">/g' $fileEn";
 				system($cmd);
+			} else {
+				if (strtolower(trim($trans)) == 'g') {
+					$trans = $gtrans;
+				}
+				if (trim($trans) == "") {
+					echo "Skipping translation\n";
+				} else {
+					$cmd =  "sed -i -e 's/\(name=.$lastTagName.*\)$/".'\1\n'."    <string name=\"".$item['name']."\">$trans<\/string>/g' $fileLang";
+					system($cmd);
+				}
 			}
 		}
 		$lasttype = $item['type'];
