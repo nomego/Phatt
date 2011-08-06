@@ -38,9 +38,6 @@ Usage: $scriptName values/strings.xml values-<langCode>/strings.xml
 END;
 }
 
-print_usage();
-exit(0);
-
 function get_translation() {
 	echo "\tTranslation (? for help): ";
 	$input = stream_get_line(STDIN, 1024, PHP_EOL);
@@ -135,8 +132,8 @@ if (strlen($_SERVER['argv'][1]) == 2) {
 	}
 } else {
 	if ($_SERVER['argc'] != 3) {
-		printf("Usage: %s strings-EN.xml string-LANG.xml\n", $_SERVER['argv'][0]);
-		die("*** Aborted\n");
+		print_usage();
+		die();
 	}
 
 	$fileEn = $_SERVER['argv'][1];
