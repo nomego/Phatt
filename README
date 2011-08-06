@@ -1,0 +1,49 @@
+Phatt - PHP Android Translation Tool
+Version 1.0
+
+--------------------------------------------------------------------------------
+
+Created to ease translation work for Android appliations since I couldn't find
+any real tools when looking around.
+
+Based on strings-check.php by Marcin Orlowski <carlos@wfmh.org.pl> (2010-07-03)
+Because of that, the tool is still a PHP CLI tool.
+
+--------------------------------------------------------------------------------
+
+Usage
+
+$ phatt res/values/strings.xml res/values-<langCode>/strings.xml
+
+The basic form which will compare specific files (strings.xml, arrays.xml, etc)
+for non-matching tags (string, string-array, array, plural) in either file.
+
+$ phatt <langCode>
+
+Run from within the project directory, this is a short-hand version of the above
+that checks for res/values/strings.xml and res/values-<langCode>/strings.xml
+(even works from within res) since this probably is the most common comparison.
+
+$ phatt <langCode> i
+
+With 'i' as a third argument, interactive mode is enabled. This will ask for
+translations and update the res/values-<langCode>/strings.xml file and put the
+translated strings in the right place in the file.
+It will also provide a Google translation of the original string with a
+possibility to accept it as-is.
+
+--------------------------------------------------------------------------------
+
+Requirements
+
+To run the tool, PHP CLI is required.
+
+For interactive mode, the following is required:
+	* py-translate (https://sourceforge.net/projects/py-translate/)
+	* GNU sed
+
+--------------------------------------------------------------------------------
+
+Installation
+
+The provided install.sh will install phatt and py-translate in /usr/local/bin

@@ -1,0 +1,195 @@
+#!/usr/bin/php -q
+<?php
+
+// Phatt - PHP Android Translation Tool - (http://www.github.com/nomego/Phatt)
+// Version 1.0 - 2010-08-06
+// 
+// Compares two res XML-files to find differences, and optionally helps
+// the user to complete missing strings
+//
+//   usage:	./strings-check values/base.xml values-lang/translated.xml
+//	or:	./strings-check <langCode>
+//		(from <project> or <project>/res directory for strings.xml)
+//	or:	./strings-check <langCode> i
+//		(to enable Google translation and interactive updates of
+//		 strings in values-<langCode>/strings.xml)
+//
+// For interactive mode, requirements are:
+//	* GNU sed
+//	* py-translate (https://sourceforge.net/projects/py-translate/)
+//
+// Written by Patrik Kullman <patrik.kullman@gmail.com>
+// Based on strings-check.php by Marcin Orlowski <carlos@wfmh.org.pl> 2010.07.03
+
+function print_usage() {
+	$scriptName = $_SERVER['SCRIPT_NAME'];
+echo <<<END
+
+Usage: $scriptName values/strings.xml values-<langCode>/strings.xml 
+
+   or: $scriptName <langCode>
+	Shorthand for the above, hardcoded to compare strings.xml
+
+   or: $scriptName <langCode> i
+	Same as above, but offers suggestions from Google Translate
+	and updates the values-<langCode>/strings.xml.
+
+
+END;
+}
+
+print_usage();
+exit(0);
+
+function get_translation() {
+	echo "\tTranslation (? for help): ";
+	$input = stream_get_line(STDIN, 1024, PHP_EOL);
+	if (trim($input) == '?') {
+		echo "\t\t<blank>:\t\tSkips current string\n";
+		echo "\t\tg:\t\t\tAccept Google translation\n";
+		echo "\t\t<anything else>:\tUpdate language file with new text\n";
+		$input = get_translation();
+	}
+	return $input;
+}
+
+class Convert {
+
+	public function XmlToArray ($n) {
+
+		$xml_array = array();
+
+		foreach ($n->childNodes as $nc) {
+			if ($nc->hasChildNodes()) {
+				$childNodes = $nc->childNodes;
+				$children = $childNodes->length;
+
+				if ($children > 1) {
+					$xml_array[$nc->nodeName][] = $this->XmlToArray($nc);
+				} else {
+					$xml_array[$nc->nodeName][]['cdata'] = $nc->nodeValue;
+				}
+				
+				$counter = count($xml_array[$nc->nodeName])-1;
+				
+			} else if ($nc->hasAttributes()) {
+				$counter = 0;
+			} else {
+				continue;
+			}
+		
+			$attrs = $nc->attributes;
+			for ($k = 0; $k < $attrs->length; $k++) {
+				$item = $attrs->item($k);
+				$xml_array[$nc->nodeName][$counter]['attribute'][$item->nodeName] = $item->nodeValue;
+			}
+
+		}
+		return ($xml_array);
+	}
+
+	public function GetLabels($fileName) {
+
+		$xml = new DOMDocument('1.0','UTF-8');
+		$xml->load($fileName);
+
+		$data = $this->XmlToArray($xml);
+
+		$result = array();
+
+		foreach (array("string", "string-array", "plurals") as $crap => $type) {
+			if (!isset($data['resources'][0][$type]))
+				continue;
+			foreach ($data['resources'][0][$type] AS $entry) {
+				if (isset($entry['attribute']['translatable']) && strtolower($entry['attribute']['translatable']) == "false")
+					continue;
+				if (isset($entry['attribute']['translate']) && strtolower($entry['attribute']['translate']) == "false")
+					continue;
+				$tmp = sprintf("%s", trim($entry['attribute']['name']));
+				$result[$type.": ".$tmp] = array(
+					'name' => $tmp,
+					"type" => $type,
+					"value" => isset($entry['cdata']) ? trim($entry['cdata']) : ""
+				);
+			}
+		}
+
+		return ($result);
+	}
+}
+
+$interactive = false;
+
+if (strlen($_SERVER['argv'][1]) == 2) {
+	if (file_exists("values"))
+		$relPath = "values";
+	else if (file_exists("res/values"))
+		$relPath = "res/values";
+	else
+		die("Don't know where to find values!");
+	$fileEn = $relPath . '/strings.xml';
+	$langCode = $_SERVER['argv'][1];
+	$fileLang = $relPath . '-' . $langCode . '/strings.xml';
+	if ($_SERVER['argc'] == 3 && in_array(strtolower($_SERVER['argv'][2]), array('i', 'interactive'))) {
+		$interactive = true;
+	}
+} else {
+	if ($_SERVER['argc'] != 3) {
+		printf("Usage: %s strings-EN.xml string-LANG.xml\n", $_SERVER['argv'][0]);
+		die("*** Aborted\n");
+	}
+
+	$fileEn = $_SERVER['argv'][1];
+	$fileLang = $_SERVER['argv'][2];
+}
+
+if (!file_exists($fileEn))	die( sprintf("*** Missing file '%s'\n", $fileEn));
+if (!file_exists($fileLang))	die( sprintf("*** Missing file '%s'\n", $fileLang));
+
+$convert = new Convert;
+$dataLang = $convert->GetLabels($fileLang);
+$dataEn = $convert->GetLabels($fileEn);
+
+$cntLang = $cntEn = 0;
+$lasttype = $lastTagName = "";
+
+foreach ($dataEn AS $key => $item) {
+	if (isset($dataLang[$key]) == false) {
+		if ($lasttype != $item['type']) echo "Missing " . $item['type'] . ":\n";
+		printf("\t%s\n", $item['name']);
+		# printf("\t\tafter: %s\n", $lastTagName);
+		printf("\t\tvalue: %s\n", $item['value']);
+		if ($interactive && $item['type'] == "string") {
+			$gtrans = exec("translate -s en -d $langCode '".$item['value']."'");
+			printf("\t\ttranslation: %s\n", $gtrans);
+			$trans = get_translation();
+			if (strtolower(trim($trans)) == 'g') {
+				$trans = $gtrans;
+			}
+			if (trim($trans) == "") {
+				echo "Skipping translation\n";
+			} else {
+				$cmd =  "sed -i -e 's/\(name=.$lastTagName.*\)$/".'\1\n'."    <string name=\"".$item['name']."\">$trans<\/string>/g' $fileLang";
+				system($cmd);
+			}
+		}
+		$lasttype = $item['type'];
+		$cntLang++;
+	}
+	$lastTagName = $item['name'];
+}
+
+foreach ($dataLang AS $key => $item) {
+	if (isset($dataEn[$key]) == false) {
+		if ($cntEn == 0) echo "\nObsolete:\n";
+		printf("\t%s\n", $item['name']);
+		$cntEn++;
+	}
+}
+
+if (($cntLang == 0) && ($cntEn == 0)) {
+	exit(0);
+} else {
+	exit(1);
+}
+?>
